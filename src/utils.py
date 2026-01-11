@@ -1,11 +1,17 @@
 import os
+import unicodedata
+from typing import Dict, cast, Tuple
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.cell.cell import Cell
 from openpyxl.styles import Alignment, Font, Border, Side
 from openpyxl.utils import get_column_letter
 
+# Ensure openpyxl Objects are strictly typed if necessary
+# Pylance strict mode might need help with openpyxl's dynamic attributes
 
-def ensure_dir(directory):
+
+def ensure_dir(directory: str) -> None:
     """Ensures that a directory exists, creating it if necessary."""
     if directory and not os.path.exists(directory):
         try:
@@ -15,17 +21,19 @@ def ensure_dir(directory):
             print(f"Error creating directory {directory}: {e}")
 
 
-def load_uid_map(file_path):
+def load_uid_map(file_path: str) -> Dict[str, str]:
     """Loads UID to Name mapping from an Excel file."""
-    uid_map = {}
+    uid_map: Dict[str, str] = {}
     if not os.path.exists(file_path):
         print(f"Warning: UID map file not found at {file_path}")
         return uid_map
 
     try:
-        uid_df = pd.read_excel(file_path)
+        # Pylance Strict: read_excel returns DataFrame | TextFileReader. Cast to DataFrame.
+        # type: ignore to suppress "partially unknown" warnings from pandas stubs
+        uid_df = cast(pd.DataFrame, pd.read_excel(file_path))  # type: ignore
         # Normalize column names
-        uid_df.columns = [c.lower() for c in uid_df.columns]
+        uid_df.columns = [str(c).lower() for c in uid_df.columns]
         if "uid" in uid_df.columns and "name" in uid_df.columns:
             # Ensure strings for matching
             uid_df["uid"] = uid_df["uid"].astype(str)
@@ -34,81 +42,93 @@ def load_uid_map(file_path):
             print(f"Warning: Columns 'uid' and 'name' not found in {file_path}")
     except Exception as e:
         print(f"Error reading UID map from {file_path}: {e}")
-    
+
     return uid_map
 
 
-def apply_excel_styles(filename):
+def apply_excel_styles(filename: str) -> None:
     """
-    Applies custom styles to the Excel file:
-    - Font: Microsoft YaHei, 12pt
-    - Alignment: Center
-    - Borders: All sides thin for cells with content
-    - Header: Bold
-    - Fixed row height (18)
-    - Auto-fit column width
+    应用自定义 Excel 样式：
+    - 字体：Microsoft YaHei, 12pt
+    - 对齐：居中
+    - 边框：内容单元格所有边为细线
+    - 标题：加粗
+    - 固定行高（18）
+    - 自适应列宽
     """
     try:
         wb = load_workbook(filename)
 
-        for ws in wb.worksheets:
-            # Define styles
-            font_normal = Font(name="Microsoft YaHei", size=12)
-            font_bold = Font(name="Microsoft YaHei", size=12, bold=True)
-            alignment_style = Alignment(horizontal="center", vertical="center")
-            thin_border = Border(
-                left=Side(style="thin"),
-                right=Side(style="thin"),
-                top=Side(style="thin"),
-                bottom=Side(style="thin"),
-            )
+        # 预定义样式对象，避免重复创建
+        font_normal = Font(name="Microsoft YaHei", size=12)
+        font_bold = Font(name="Microsoft YaHei", size=12, bold=True)
+        alignment_style = Alignment(horizontal="center", vertical="center")
+        thin_border = Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        )
 
-            # Iterate over all cells
-            for row in ws.iter_rows():
+        for ws in wb.worksheets:
+            # 记录每列的最大宽度 {col_idx: max_width}
+            col_widths: Dict[int, float] = {}
+
+            for row_raw in ws.iter_rows():
+                # Cast row to Tuple[Cell, ...] to help type checking
+                row = cast(Tuple[Cell, ...], row_raw)
+
+                if not row:
+                    continue
+
+                # 设置行高
+                # Ensure row index is int
+                ws.row_dimensions[row[0].row].height = 18
+
                 for cell in row:
+                    # 应用样式
                     cell.alignment = alignment_style
                     cell.border = thin_border
+                    cell.font = font_bold if cell.row == 1 else font_normal
 
-                    if cell.row == 1:
-                        cell.font = font_bold
-                    else:
-                        cell.font = font_normal
+                    # 计算内容宽度
+                    cell_value = cell.value
+                    if cell_value:
+                        cell_text = str(cell_value)
+                        cell_len = 0.0  # Float for precision
+                        for char in cell_text:
+                            # 判断字符宽度：F/W/A (Fullwidth/Wide/Ambiguous) 视为宽字符
+                            if unicodedata.east_asian_width(char) in ("F", "W", "A"):
+                                cell_len += 1.8
+                            else:
+                                cell_len += 1.1
 
-            # Set row height
-            for i in range(1, ws.max_row + 1):
-                ws.row_dimensions[i].height = 18
+                        current_max = col_widths.get(cell.column, 0.0)
+                        col_widths[cell.column] = max(current_max, cell_len)
 
-            # Auto-fit columns
-            for column_cells in ws.columns:
-                length = 0
-                for cell in column_cells:
-                    if cell.value:
-                        try:
-                            # Handle CJK characters being wider
-                            cell_str = str(cell.value)
-                            cell_len = 0
-                            for char in cell_str:
-                                if ord(char) > 127:
-                                    cell_len += 1.8  # Adjusted for CJK width
-                                else:
-                                    cell_len += 1.1  # Adjusted for Latin width with 12pt font
-                            length = max(length, cell_len)
-                        except:
-                            length = max(length, len(str(cell.value)) * 1.1)
+            # 应用列宽
+            for col_idx, length in col_widths.items():
+                col_letter = get_column_letter(col_idx)
 
-                col_letter = get_column_letter(column_cells[0].column)
-                
-                # Special handling for "题目名称" (Problem Title)
-                # Ensure we have enough buffer and prevent it from being too narrow
-                if str(column_cells[0].value) == "题目名称":
-                     # Increase buffer specifically for titles
-                     # Cap at 80 to prevent massive width
-                     ws.column_dimensions[col_letter].width = min(length + 8, 80)
-                else:
-                     ws.column_dimensions[col_letter].width = length + 4
+                # 默认最小宽度
+                final_width = max(length + 4, 10)
+
+                # 特殊处理：获取该列标题
+                header_cell = ws.cell(row=1, column=col_idx)
+                header_val = header_cell.value
+
+                # 针对 "题目名称" 列的特殊调整
+                if header_val and str(header_val).strip() == "题目名称":
+                    final_width = min(length + 8, 80)
+
+                ws.column_dimensions[col_letter].width = final_width
 
         wb.save(filename)
         print("Styles applied successfully.")
 
+    except PermissionError:
+        print(
+            f"Error: Permission denied saving '{filename}'. Please close the file if it is open."
+        )
     except Exception as e:
         print(f"Error applying styles: {e}")
