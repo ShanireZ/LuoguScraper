@@ -46,6 +46,16 @@ def load_uid_map(file_path: str) -> Dict[str, str]:
     return uid_map
 
 
+def _get_char_width(char: str) -> float:
+    """
+    计算单个字符的视觉宽度（估算值）。
+    宽字符（F/W/A）计为 1.8，其他计为 1.1。
+    """
+    if unicodedata.east_asian_width(char) in ("F", "W", "A"):
+        return 1.8
+    return 1.1
+
+
 def apply_excel_styles(filename: str) -> None:
     """
     应用自定义 Excel 样式：
@@ -71,7 +81,7 @@ def apply_excel_styles(filename: str) -> None:
         )
 
         for ws in wb.worksheets:
-            # 记录每列的最大宽度 {col_idx: max_width}
+            # 记录每列的最大宽度 {col_idx (1-based): max_width}
             col_widths: Dict[int, float] = {}
 
             for row_raw in ws.iter_rows():
@@ -93,15 +103,10 @@ def apply_excel_styles(filename: str) -> None:
 
                     # 计算内容宽度
                     cell_value = cell.value
-                    if cell_value:
+                    if cell_value is not None:
                         cell_text = str(cell_value)
-                        cell_len = 0.0  # Float for precision
-                        for char in cell_text:
-                            # 判断字符宽度：F/W/A (Fullwidth/Wide/Ambiguous) 视为宽字符
-                            if unicodedata.east_asian_width(char) in ("F", "W", "A"):
-                                cell_len += 1.8
-                            else:
-                                cell_len += 1.1
+                        # 使用 sum() 和 生成器表达式简化逻辑
+                        cell_len = sum(_get_char_width(char) for char in cell_text)
 
                         current_max = col_widths.get(cell.column, 0.0)
                         col_widths[cell.column] = max(current_max, cell_len)
@@ -114,6 +119,7 @@ def apply_excel_styles(filename: str) -> None:
                 final_width = max(length + 4, 10)
 
                 # 特殊处理：获取该列标题
+                # 注意：假设第一行为标题行
                 header_cell = ws.cell(row=1, column=col_idx)
                 header_val = header_cell.value
 

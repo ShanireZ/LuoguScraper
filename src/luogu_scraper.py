@@ -48,7 +48,8 @@ def get_records(
     # Use cached UserAgent to avoid potential network issues
     try:
         # UserAgent might not have type stubs for use_cache_server
-        ua = UserAgent(use_cache_server=False).random  # type: ignore
+        ua_obj = UserAgent(use_cache_server=False)  # type: ignore
+        ua = ua_obj.random
     except Exception:
         ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
@@ -65,8 +66,8 @@ def get_records(
 
     if cookies:
         print("Using provided cookies.")
-        # requests Cookies update expects dict or CookieJar, strict check might fail on Optional
-        session.cookies.update(cookies)  # type: ignore
+        # Pylance Strict mode: add_dict_to_cookiejar arguments may not be fully typed in stubs
+        requests.utils.add_dict_to_cookiejar(session.cookies, cookies)  # type: ignore
 
     all_records: List[Dict[str, Any]] = []
 
@@ -153,7 +154,11 @@ def get_records(
                 submit_time: int = record.get("submitTime", 0)
 
                 # Filter by date
-                if min_timestamp is not None and submit_time < min_timestamp:
+                if (
+                    min_timestamp is not None
+                    and submit_time != 0
+                    and submit_time < min_timestamp
+                ):
                     print("Found record older than cutoff date. Stopping.")
                     # Assuming records are returned in descending order (newest first)
                     # We can stop here.
@@ -162,7 +167,7 @@ def get_records(
                 # Only accepted records (Status 12)
                 # If you want to include others, remove the check.
                 # User asked for "Accepted status's problem and id"
-                if status != 12:
+                if not isinstance(status, int) or status != 12:
                     continue
 
                 submit_time_str = datetime.datetime.fromtimestamp(submit_time).strftime(
@@ -223,7 +228,11 @@ if __name__ == "__main__":
 
     uid_input: Optional[str] = os.environ.get("LUOGU_UID")
     if not uid_input:
-        uid_input = input("Enter _uid: ").strip()
+        print("Enter _uid: ", end="", flush=True)
+        # 简单掩盖输入，虽然不是真正的 hidden input，但可以避免直接回显
+        # 或者可以使用 getpass 来隐藏
+        # uid_input = input().strip()
+        uid_input = getpass.getpass("Enter _uid (hidden input): ").strip()
 
     if not uid_input:
         print("Invalid _uid. Exiting.")

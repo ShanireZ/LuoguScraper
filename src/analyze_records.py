@@ -39,26 +39,27 @@ def process_user_data(file_path: Path, uid: str, user_name: str) -> pd.DataFrame
         df = df.reset_index(drop=True)
 
     # Handle NaNs
-    # Pylance Strict mode may warn about unknown types from fillna
-    df = cast(pd.DataFrame, df.fillna(""))  # type: ignore
+    # Note: reindex may introduce NaNs. We use "" for compatibility with Excel string cells.
+    # explicit type hint for strict mode
+    df_clean = cast(pd.DataFrame, df.fillna(""))  # type: ignore
 
     # Split time into Date and Time
-    if not df.empty and "time" in df.columns:
-        time_split = df["time"].astype(str).str.split(" ", n=1, expand=True)
-        df["AC日期"] = time_split[0]
-        df["AC时间"] = time_split[1] if time_split.shape[1] > 1 else ""
+    if not df_clean.empty and "time" in df_clean.columns:
+        time_split = df_clean["time"].astype(str).str.split(" ", n=1, expand=True)
+        df_clean["AC日期"] = time_split[0]
+        df_clean["AC时间"] = time_split[1] if time_split.shape[1] > 1 else ""
     else:
-        df["AC日期"] = ""
-        df["AC时间"] = ""
+        df_clean["AC日期"] = ""
+        df_clean["AC时间"] = ""
 
     # Add metadata
-    df["序号"] = range(1, len(df) + 1)
-    df["UID"] = uid
-    df["姓名"] = user_name
-    df["题号"] = df["problem_id"]
-    df["题目名称"] = df["problem_title"]
+    df_clean["序号"] = range(1, len(df_clean) + 1)
+    df_clean["UID"] = uid
+    df_clean["姓名"] = user_name
+    df_clean["题号"] = df_clean["problem_id"]
+    df_clean["题目名称"] = df_clean["problem_title"]
 
-    return df[["序号", "UID", "姓名", "题号", "题目名称", "AC日期", "AC时间"]]
+    return df_clean[["序号", "UID", "姓名", "题号", "题目名称", "AC日期", "AC时间"]]
 
 
 def analyze_to_excel(json_dir: str, output_file: str) -> None:
@@ -127,9 +128,9 @@ def analyze_to_excel(json_dir: str, output_file: str) -> None:
             summary_df = summary_df.sort_values(by="AC数量", ascending=False)
 
             # Numeric index for Summary
-            # Use 'Any' cast for the value argument to bypass strict checks if necessary, or just ignore
             row_indices: List[int] = list(range(1, len(summary_df) + 1))
-            summary_df.insert(0, "序号", cast(Any, row_indices))  # type: ignore
+            # Pylance Strict mode: insert method may have partially unknown type in stubs
+            summary_df.insert(0, "序号", row_indices)  # type: ignore
 
             summary_df.to_excel(writer, index=False, sheet_name="做题统计")  # type: ignore
 

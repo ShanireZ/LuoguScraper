@@ -16,23 +16,6 @@ OUTPUT_FILE: str = str(_BASE_PATH / "opt" / "luogu_analysis.xlsx")
 
 # Luogu Config
 # 允许通过环境变量覆盖 URL，便于测试或应对 API 变更
-LUOGU_BASE_URL: str = (
-    os.getenv("LUOGU_BASE_URL", "https://www.luogu.com.cn/record/list")
-    or "https://www.luogu.com.cn/record/list"
+LUOGU_BASE_URL: str = os.getenv(
+    "LUOGU_BASE_URL", "https://www.luogu.com.cn/record/list"
 )
-
-# 注意：
-# 此配置文件不应包含副作用（如创建目录）。
-# 目录的创建应由具体使用该目录的业务代码（如 utils.ensure_dir）负责。
-
-if __name__ == "__main__":
-    # 快速调试配置信息
-    print(f"Configuration loaded from: {__file__}")
-    print("-" * 40)
-    print(f"{'BASE_DIR:':<15} {BASE_DIR}")
-    print(f"{'JSON_DIR:':<15} {JSON_DIR}")
-    print(f"{'OPT_DIR:':<15} {OPT_DIR}")
-    print("-" * 40)
-    print(f"{'UIDS_FILE:':<15} {UIDS_FILE}")
-    print(f"{'OUTPUT_FILE:':<15} {OUTPUT_FILE}")
-    print(f"{'API URL:':<15} {LUOGU_BASE_URL}")
