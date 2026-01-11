@@ -138,6 +138,8 @@ def analyze_to_excel(json_dir, output_file):
 
         print("Done.")
         apply_excel_styles(output_file)
+    except PermissionError:
+        print(f"Error: Permission denied. Please close {output_file} if it is open.")
     except Exception as e:
         print(f"Error saving Excel file: {e}")
 

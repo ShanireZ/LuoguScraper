@@ -5,6 +5,7 @@ import urllib.parse
 import os
 import sys
 import datetime
+import getpass
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
@@ -31,7 +32,10 @@ def get_records(user_id, cookies=None, min_date=None):
     session.headers.update(
         {
             "User-Agent": UserAgent().random,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept": (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                "image/webp,*/*;q=0.8"
+            ),
             "Referer": f"https://www.luogu.com.cn/record/list?user={user_id}",
         }
     )
@@ -45,7 +49,7 @@ def get_records(user_id, cookies=None, min_date=None):
     while True:
         print(f"Fetching page {params['page']}...")
         try:
-            response = session.get(base_url, params=params)
+            response = session.get(base_url, params=params, timeout=15)
 
             if response.status_code != 200:
                 print(f"Failed to retrieve page: Status code {response.status_code}")
@@ -155,8 +159,16 @@ def get_records(user_id, cookies=None, min_date=None):
             params["page"] += 1
             time.sleep(1)
 
+        except requests.exceptions.Timeout:
+            print(f"Request timed out while fetching page {params['page']}.")
+            break
+        except requests.exceptions.RequestException as e:
+            print(f"Network request error on page {params['page']}: {e}")
+            break
         except Exception as e:
-            print(f"Request error: {e}")
+            print(f"Unexpected error on page {params['page']}: {e}")
+            # Optionally import traceback and print_exc() for debugging
+            # import traceback; traceback.print_exc()
             break
 
     return all_records
@@ -167,15 +179,25 @@ if __name__ == "__main__":
     print(
         "You can find them in your browser developer tools (F12) -> Application -> Cookies."
     )
+    print("Alternatively, set LUOGU_CLIENT_ID and LUOGU_UID environment variables.")
 
-    client_id_input = input("Enter __client_id: ").strip()
-    uid_input = input("Enter _uid: ").strip()
-
-    if client_id_input and uid_input:
-        cookies = {"__client_id": client_id_input, "_uid": uid_input}
-    else:
-        print("Cookies not provided. Exiting.")
+    client_id_input = os.environ.get("LUOGU_CLIENT_ID")
+    if not client_id_input:
+        client_id_input = getpass.getpass("Enter __client_id (hidden input): ").strip()
+    
+    if not client_id_input:
+        print("Invalid __client_id. Exiting.")
         sys.exit(1)
+
+    uid_input = os.environ.get("LUOGU_UID")
+    if not uid_input:
+        uid_input = input("Enter _uid: ").strip()
+
+    if not uid_input:
+        print("Invalid _uid. Exiting.")
+        sys.exit(1)
+
+    cookies = {"__client_id": client_id_input, "_uid": uid_input}
 
     target_users = []
 

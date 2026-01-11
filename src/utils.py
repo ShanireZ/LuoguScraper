@@ -18,21 +18,23 @@ def ensure_dir(directory):
 def load_uid_map(file_path):
     """Loads UID to Name mapping from an Excel file."""
     uid_map = {}
-    if os.path.exists(file_path):
-        try:
-            uid_df = pd.read_excel(file_path)
-            # Normalize column names
-            uid_df.columns = [c.lower() for c in uid_df.columns]
-            if "uid" in uid_df.columns and "name" in uid_df.columns:
-                # Ensure strings for matching
-                uid_df["uid"] = uid_df["uid"].astype(str)
-                uid_map = dict(zip(uid_df["uid"], uid_df["name"]))
-            else:
-                pass # Silent failure if columns mismatch
-        except Exception:
-            pass # Silent failure if read error
-    else:
-        pass # Silent failure if file not found
+    if not os.path.exists(file_path):
+        print(f"Warning: UID map file not found at {file_path}")
+        return uid_map
+
+    try:
+        uid_df = pd.read_excel(file_path)
+        # Normalize column names
+        uid_df.columns = [c.lower() for c in uid_df.columns]
+        if "uid" in uid_df.columns and "name" in uid_df.columns:
+            # Ensure strings for matching
+            uid_df["uid"] = uid_df["uid"].astype(str)
+            uid_map = dict(zip(uid_df["uid"], uid_df["name"]))
+        else:
+            print(f"Warning: Columns 'uid' and 'name' not found in {file_path}")
+    except Exception as e:
+        print(f"Error reading UID map from {file_path}: {e}")
+    
     return uid_map
 
 
@@ -96,11 +98,12 @@ def apply_excel_styles(filename):
 
                 col_letter = get_column_letter(column_cells[0].column)
                 
-                # Special handling for "题目名称" (Problem Title) to prevent separate lines or too narrow
-                # If the column header suggests it's the title column, ensure we have enough buffer
+                # Special handling for "题目名称" (Problem Title)
+                # Ensure we have enough buffer and prevent it from being too narrow
                 if str(column_cells[0].value) == "题目名称":
                      # Increase buffer specifically for titles
-                     ws.column_dimensions[col_letter].width = min(length + 8, 80) # Cap at 80 to prevent massive width
+                     # Cap at 80 to prevent massive width
+                     ws.column_dimensions[col_letter].width = min(length + 8, 80)
                 else:
                      ws.column_dimensions[col_letter].width = length + 4
 
